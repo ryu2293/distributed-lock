@@ -54,7 +54,7 @@ class EnrollmentConcurrencyTest {
         for (Long studentId : studentIds) {
             pool.submit(() -> {
                 try {
-                    enrollmentFacade.enrollFacade(studentId, lectureId);
+                    enrollmentService.atomicEnroll(studentId, lectureId);
                     success.incrementAndGet();
                 } catch (Exception e) {
                     fail.incrementAndGet();

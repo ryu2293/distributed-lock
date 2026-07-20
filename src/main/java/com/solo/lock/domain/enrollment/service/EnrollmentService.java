@@ -34,4 +34,21 @@ public class EnrollmentService {
 
         enrollmentRepository.save(enrollment);
     }
+
+    @Transactional
+    public void atomicEnroll(Long studentId, Long lectureId) {
+        int updated = lectureRepository.updateIncrease(lectureId);
+        if(updated == 0) throw new RuntimeException("정원 초과 예외");
+
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new IllegalArgumentException());
+        Lecture lecture = lectureRepository.getReferenceById(lectureId);
+
+        Enrollment enrollment = Enrollment.builder()
+                .student(student)
+                .lecture(lecture)
+                .build();
+
+        enrollmentRepository.save(enrollment);
+    }
 }
