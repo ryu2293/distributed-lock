@@ -1,7 +1,9 @@
 package com.solo.lock.domain.lecture.repository;
 
 import com.solo.lock.domain.lecture.entity.Lecture;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,4 +13,8 @@ public interface LectureRepository extends JpaRepository<Lecture, Long> {
     @Query("UPDATE Lecture l SET l.enrolledCount = l.enrolledCount + 1 " +
             "WHERE l.id = :id AND l.enrolledCount < l.capacity")
     int updateIncrease(@Param("id") Long lectureId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select l from Lecture l where l.id = :id")
+    Lecture findByIdForUpdate(@Param("id") Long lectureId);
 }
