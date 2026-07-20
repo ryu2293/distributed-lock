@@ -28,4 +28,9 @@ public class Lecture {
         this.capacity = capacity;
         this.enrolledCount = enrolledCount;
     }
+
+    public void increase() {
+        if(this.capacity <= this.enrolledCount) throw new RuntimeException("정원 초과 예외");
+        this.enrolledCount++;
+    }
 }
