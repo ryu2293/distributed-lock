@@ -1,0 +1,77 @@
+package com.solo.lock.domain.enrollment.service;
+
+import com.solo.lock.domain.enrollment.repository.EnrollmentRepository;
+import com.solo.lock.domain.lecture.entity.Lecture;
+import com.solo.lock.domain.lecture.repository.LectureRepository;
+import com.solo.lock.domain.student.entity.Student;
+import com.solo.lock.domain.student.repository.StudentRepository;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@SpringBootTest
+class EnrollmentConcurrencyTest {
+
+    @Autowired EnrollmentService enrollmentService;
+    @Autowired LectureRepository lectureRepository;
+    @Autowired StudentRepository studentRepository;
+    @Autowired EnrollmentRepository enrollmentRepository;
+
+    @Test
+    void 동시에_100명이_정원50강의를_신청하면_오버셀이_난다() throws InterruptedException {
+        // ── given : 데이터 준비 ──
+        int capacity = 50;
+        int studentCount = 100;
+
+        Lecture lecture = lectureRepository.save(
+                Lecture.builder().title("동시성").capacity(capacity).enrolledCount(0).build());
+        Long lectureId = lecture.getId();
+
+        List<Long> studentIds = new ArrayList<>();
+        for (int i = 0; i < studentCount; i++) {
+            Student student = studentRepository.save(
+                    Student.builder().schoolId("s" + i).name("학생" + i).build());
+            studentIds.add(student.getId());
+        }
+
+        // ── when : 100명이 동시에 신청 ──
+        ExecutorService pool = Executors.newFixedThreadPool(32);
+        CountDownLatch latch = new CountDownLatch(studentCount);
+        AtomicInteger success = new AtomicInteger();
+        AtomicInteger fail = new AtomicInteger();
+
+        for (Long studentId : studentIds) {
+            pool.submit(() -> {
+                try {
+                    enrollmentService.enroll(studentId, lectureId);
+                    success.incrementAndGet();
+                } catch (Exception e) {
+                    fail.incrementAndGet();
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        latch.await();       // 100개 스레드가 다 끝날 때까지 대기
+        pool.shutdown();
+
+        // ── then : 결과 검증 ──
+        Lecture result = lectureRepository.findById(lectureId).orElseThrow();
+        long enrollmentRows = enrollmentRepository.count();
+
+        System.out.println("성공=" + success.get() + " 실패=" + fail.get());
+        System.out.println("enrolledCount=" + result.getEnrolledCount());
+        System.out.println("Enrollment 행 수=" + enrollmentRows);
+
+        assertThat(enrollmentRows).isEqualTo(capacity);  // ← 여기서 실패(RED)해야 정상
+    }
+}

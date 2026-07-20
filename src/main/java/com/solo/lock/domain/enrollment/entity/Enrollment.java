@@ -19,15 +19,15 @@ public class Enrollment {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "student_id", nullable = false)
-    private Student students;
+    private Student student;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lecture_id", nullable = false)
     private Lecture lecture;
 
     @Builder
-    public Enrollment(Student students, Lecture lecture) {
-        this.students = students;
+    public Enrollment(Student student, Lecture lecture) {
+        this.student = student;
         this.lecture = lecture;
     }
 }
