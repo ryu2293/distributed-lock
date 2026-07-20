@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: lock
+
+  # ── H2 in-memory DB ──────────────────────────────
+  datasource:
+    url: jdbc:h2:mem:lockdb;MODE=MySQL   # MySQL 문법 흉내 (실무 DB와 최대한 유사하게)
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: true       # 브라우저에서 http://localhost:8080/h2-console 로 DB 확인
+      path: /h2-console
+
+  # ── JPA / Hibernate ─────────────────────────────
+  jpa:
+    hibernate:
+      ddl-auto: create    # 학습용: 부팅 때마다 스키마 새로 생성 (운영은 절대 X)
+    show-sql: true        # 실행되는 SQL 콘솔 출력
+    properties:
+      hibernate:
+        format_sql: true  # SQL 예쁘게 정렬
+    open-in-view: false   # OSIV 끔 — 영속성 컨텍스트를 트랜잭션 범위로 제한 (권장)
+
+  # ── Redis (4단계 분산 락에서 사용) ──────────────
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+server:
+  port: 8080
