@@ -1,5 +1,6 @@
 package com.solo.lock.domain.enrollment.service;
 
+import com.solo.lock.domain.enrollment.facade.EnrollmentFacade;
 import com.solo.lock.domain.enrollment.repository.EnrollmentRepository;
 import com.solo.lock.domain.lecture.entity.Lecture;
 import com.solo.lock.domain.lecture.repository.LectureRepository;
@@ -25,6 +26,7 @@ class EnrollmentConcurrencyTest {
     @Autowired LectureRepository lectureRepository;
     @Autowired StudentRepository studentRepository;
     @Autowired EnrollmentRepository enrollmentRepository;
+    @Autowired EnrollmentFacade enrollmentFacade;
 
     @Test
     void 동시에_100명이_정원50강의를_신청하면_오버셀이_난다() throws InterruptedException {
@@ -52,7 +54,7 @@ class EnrollmentConcurrencyTest {
         for (Long studentId : studentIds) {
             pool.submit(() -> {
                 try {
-                    enrollmentService.enroll(studentId, lectureId);
+                    enrollmentFacade.enrollFacade(studentId, lectureId);
                     success.incrementAndGet();
                 } catch (Exception e) {
                     fail.incrementAndGet();
