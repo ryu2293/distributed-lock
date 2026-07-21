@@ -76,4 +76,45 @@ class EnrollmentConcurrencyTest {
 
         assertThat(enrollmentRows).isEqualTo(capacity);  // ← 여기서 실패(RED)해야 정상
     }
+
+    @Test
+    void 같은_학생이_같은_강의를_동시에_여러번_신청하면_중복된다() throws InterruptedException {
+        // ── given : 학생 1명, 강의 1개 (정원 넉넉히) ──
+        Lecture lecture = lectureRepository.save(
+                Lecture.builder().title("따닥").capacity(100).enrolledCount(0).build());
+        Long lectureId = lecture.getId();
+
+        Student student = studentRepository.save(
+                Student.builder().schoolId("s1").name("학생1").build());
+        Long studentId = student.getId();          // ★ 딱 한 명. 이 id를 반복 사용
+
+        int tryCount = 10;                          // 같은 신청을 10번 따닥
+
+        // ── when : 같은 (studentId, lectureId)를 동시에 10번 ──
+        ExecutorService pool = Executors.newFixedThreadPool(10);
+        CountDownLatch latch = new CountDownLatch(tryCount);
+        AtomicInteger success = new AtomicInteger();
+        AtomicInteger fail = new AtomicInteger();
+
+        for (int i = 0; i < tryCount; i++) {
+            pool.submit(() -> {
+                try {
+                    enrollmentFacade.optimisticEnrollFacade(studentId, lectureId);   // 같은 학생 반복
+                    success.incrementAndGet();
+                } catch (Exception e) {
+                    fail.incrementAndGet();
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        latch.await();
+        pool.shutdown();
+
+        // ── then ──
+        long rows = enrollmentRepository.count();
+        System.out.println("성공=" + success.get() + " 실패=" + fail.get() + " 행 수=" + rows);
+
+        assertThat(rows).isEqualTo(1);   // 한 학생은 한 번만 → 지금은 RED(여러 건)
+    }
 }
