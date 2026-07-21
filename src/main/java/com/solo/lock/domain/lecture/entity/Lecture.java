@@ -22,6 +22,9 @@ public class Lecture {
     @Column
     private Integer enrolledCount;
 
+    @Version
+    private Long version;
+
     @Builder
     public Lecture(String title, Integer capacity, Integer enrolledCount) {
         this.title = title;

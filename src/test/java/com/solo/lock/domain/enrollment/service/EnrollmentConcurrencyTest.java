@@ -46,7 +46,7 @@ class EnrollmentConcurrencyTest {
         }
 
         // ── when : 100명이 동시에 신청 ──
-        ExecutorService pool = Executors.newFixedThreadPool(32);
+        ExecutorService pool = Executors.newFixedThreadPool(100);
         CountDownLatch latch = new CountDownLatch(studentCount);
         AtomicInteger success = new AtomicInteger();
         AtomicInteger fail = new AtomicInteger();
@@ -54,7 +54,7 @@ class EnrollmentConcurrencyTest {
         for (Long studentId : studentIds) {
             pool.submit(() -> {
                 try {
-                    enrollmentService.pessimisticEnroll(studentId, lectureId);
+                    enrollmentFacade.optimisticEnrollFacade(studentId, lectureId);
                     success.incrementAndGet();
                 } catch (Exception e) {
                     fail.incrementAndGet();

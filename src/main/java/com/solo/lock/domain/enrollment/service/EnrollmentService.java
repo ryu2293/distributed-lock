@@ -67,4 +67,21 @@ public class EnrollmentService {
 
         enrollmentRepository.save(enrollment);
     }
+
+    @Transactional
+    public void optimisticEnroll(Long studentId, Long lectureId) {
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new IllegalArgumentException());
+        Lecture lecture = lectureRepository.findById(lectureId)
+                .orElseThrow(() -> new IllegalArgumentException());
+
+        lecture.increase();
+
+        Enrollment enrollment = Enrollment.builder()
+                .student(student)
+                .lecture(lecture)
+                .build();
+
+        enrollmentRepository.save(enrollment);
+    }
 }
