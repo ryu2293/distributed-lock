@@ -4,6 +4,7 @@ import com.solo.lock.domain.enrollment.facade.EnrollmentFacade;
 import com.solo.lock.domain.enrollment.repository.EnrollmentRepository;
 import com.solo.lock.domain.lecture.entity.Lecture;
 import com.solo.lock.domain.lecture.repository.LectureRepository;
+import com.solo.lock.domain.redis.facade.AopLockFacade;
 import com.solo.lock.domain.redis.facade.DistributedLockFacade;
 import com.solo.lock.domain.redis.facade.RedissonFacade;
 import com.solo.lock.domain.student.entity.Student;
@@ -31,6 +32,7 @@ class EnrollmentConcurrencyTest {
     @Autowired EnrollmentFacade enrollmentFacade;
     @Autowired DistributedLockFacade distributedLockFacade;
     @Autowired RedissonFacade redissonFacade;
+    @Autowired AopLockFacade aopLockFacade;
 
     @Test
     void 동시에_100명이_정원50강의를_신청하면_오버셀이_난다() throws InterruptedException {
@@ -77,6 +79,51 @@ class EnrollmentConcurrencyTest {
         System.out.println("성공=" + success.get() + " 실패=" + fail.get());
         System.out.println("enrolledCount=" + result.getEnrolledCount());
         System.out.println("Enrollment 행 수=" + enrollmentRows);
+
+        assertThat(enrollmentRows).isEqualTo(capacity);
+    }
+
+    @Test
+    void AOP분산락_동시에_100명이_정원50강의를_신청하면_50건만_성공한다() throws InterruptedException {
+        // ── given ──
+        int capacity = 50;
+        int studentCount = 100;
+
+        Lecture lecture = lectureRepository.save(
+                Lecture.builder().title("AOP분산락").capacity(capacity).enrolledCount(0).build());
+        Long lectureId = lecture.getId();
+
+        List<Long> studentIds = new ArrayList<>();
+        for (int i = 0; i < studentCount; i++) {
+            Student student = studentRepository.save(
+                    Student.builder().schoolId("a" + i).name("학생" + i).build());
+            studentIds.add(student.getId());
+        }
+
+        // ── when : @DistributedLock 파사드로 100명 동시 신청 ──
+        ExecutorService pool = Executors.newFixedThreadPool(100);
+        CountDownLatch latch = new CountDownLatch(studentCount);
+        AtomicInteger success = new AtomicInteger();
+        AtomicInteger fail = new AtomicInteger();
+
+        for (Long studentId : studentIds) {
+            pool.submit(() -> {
+                try {
+                    aopLockFacade.enroll(studentId, lectureId);
+                    success.incrementAndGet();
+                } catch (Exception e) {
+                    fail.incrementAndGet();
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        latch.await();
+        pool.shutdown();
+
+        // ── then ──
+        long enrollmentRows = enrollmentRepository.count();
+        System.out.println("[AOP] 성공=" + success.get() + " 실패=" + fail.get() + " 행 수=" + enrollmentRows);
 
         assertThat(enrollmentRows).isEqualTo(capacity);
     }
