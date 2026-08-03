@@ -4,6 +4,7 @@ import com.solo.lock.domain.enrollment.facade.EnrollmentFacade;
 import com.solo.lock.domain.enrollment.repository.EnrollmentRepository;
 import com.solo.lock.domain.lecture.entity.Lecture;
 import com.solo.lock.domain.lecture.repository.LectureRepository;
+import com.solo.lock.domain.redis.facade.DistributedLockFacade;
 import com.solo.lock.domain.student.entity.Student;
 import com.solo.lock.domain.student.repository.StudentRepository;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ class EnrollmentConcurrencyTest {
     @Autowired StudentRepository studentRepository;
     @Autowired EnrollmentRepository enrollmentRepository;
     @Autowired EnrollmentFacade enrollmentFacade;
+    @Autowired DistributedLockFacade distributedLockFacade;
 
     @Test
     void 동시에_100명이_정원50강의를_신청하면_오버셀이_난다() throws InterruptedException {
@@ -54,7 +56,7 @@ class EnrollmentConcurrencyTest {
         for (Long studentId : studentIds) {
             pool.submit(() -> {
                 try {
-                    enrollmentFacade.optimisticEnrollFacade(studentId, lectureId);
+                    distributedLockFacade.enroll(studentId, lectureId);
                     success.incrementAndGet();
                 } catch (Exception e) {
                     fail.incrementAndGet();
@@ -74,7 +76,7 @@ class EnrollmentConcurrencyTest {
         System.out.println("enrolledCount=" + result.getEnrolledCount());
         System.out.println("Enrollment 행 수=" + enrollmentRows);
 
-        assertThat(enrollmentRows).isEqualTo(capacity);  // ← 여기서 실패(RED)해야 정상
+        assertThat(enrollmentRows).isEqualTo(capacity);
     }
 
     @Test
