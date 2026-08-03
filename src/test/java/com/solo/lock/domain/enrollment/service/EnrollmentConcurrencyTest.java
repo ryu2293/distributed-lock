@@ -5,6 +5,7 @@ import com.solo.lock.domain.enrollment.repository.EnrollmentRepository;
 import com.solo.lock.domain.lecture.entity.Lecture;
 import com.solo.lock.domain.lecture.repository.LectureRepository;
 import com.solo.lock.domain.redis.facade.DistributedLockFacade;
+import com.solo.lock.domain.redis.facade.RedissonFacade;
 import com.solo.lock.domain.student.entity.Student;
 import com.solo.lock.domain.student.repository.StudentRepository;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ class EnrollmentConcurrencyTest {
     @Autowired EnrollmentRepository enrollmentRepository;
     @Autowired EnrollmentFacade enrollmentFacade;
     @Autowired DistributedLockFacade distributedLockFacade;
+    @Autowired RedissonFacade redissonFacade;
 
     @Test
     void 동시에_100명이_정원50강의를_신청하면_오버셀이_난다() throws InterruptedException {
@@ -56,7 +58,7 @@ class EnrollmentConcurrencyTest {
         for (Long studentId : studentIds) {
             pool.submit(() -> {
                 try {
-                    distributedLockFacade.enroll(studentId, lectureId);
+                    redissonFacade.enroll(studentId, lectureId);
                     success.incrementAndGet();
                 } catch (Exception e) {
                     fail.incrementAndGet();
