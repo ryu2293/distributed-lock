@@ -1,0 +1,19 @@
+# MySQL 프로파일 — 락/부하/다중 인스턴스 검증용
+# 실행: --spring.profiles.active=mysql
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3307/lockdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: 1234
+
+  h2:
+    console:
+      enabled: false      # MySQL 쓸 땐 H2 콘솔 끔
+
+  jpa:
+    hibernate:
+      ddl-auto: create    # 학습용
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
