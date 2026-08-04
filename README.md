@@ -34,6 +34,7 @@
 | 4 | `step4/distributed-lock` | Redis 분산 락 (Lettuce→Redisson→AOP) | SETNX, Lua, watchdog, Pub/Sub |
 | 5 | `step5/multi-instance-loadtest` | 다중 인스턴스 검증 + 부하테스트 | 분산 락 필요성 증명, 성능/한계 |
 | 6 | `step6/cache-stampede` | 인기 강의 집계 캐시 + 분산 락 | 캐시 스탬피드, double-checked locking, DB 밖 자원 |
+| 7 | `step7/fencing-token` | Fencing token으로 좀비 라이터 차단 | 분산 락 한계, 단조 토큰, 원자적 조건부 UPDATE |
 
 ### 2단계 — `@Transactional` + `synchronized` 함정
 메서드에 `synchronized`만 붙이면 **AOP 트랜잭션이 synchronized 바깥**을 감싸서 **커밋 전에 락이 풀린다** → 여전히 오버셀.
@@ -124,6 +125,39 @@
 - **Fencing token**: GC 멈춤·failover로 "옛 홀더가 뒤늦게 쓰는" 문제를 단조 증가 토큰으로 차단 (근본 해결)
 - **Zookeeper**: 순차 노드 기반, 강한 일관성(CP) vs Redis(AP)
 - **watchdog 주의**: 프로세스가 살아있는데 작업이 무한 지연되면 watchdog가 계속 갱신 → **좀비 락**. 작업 타임아웃 + leaseTime 상한으로 방어.
+
+---
+
+## 7단계 — Fencing Token (분산 락의 근본 한계 보완)
+
+분산 락도 완벽하지 않다. 홀더가 **긴 GC/멈춤** 사이 락이 만료되면, 남이 락을 새로 잡고,
+멈췄던 홀더가 깨어나 **뒤늦게 자원에 쓴다(좀비 라이터)** → 최신 값이 오염된다.
+
+**시나리오**: A가 락(lease 2s) 획득 후 3초 멈춤 → 락 만료 → B가 락 획득·쓰기(100) → A가 깨어나 뒤늦게 쓰기(50)
+
+| 구현 | A 쓰기 | 최종 값 | 판정 |
+|------|:-----:|:------:|------|
+| fencing 없음 | 성공(1) | **50** | ❌ 좀비 A가 B(100)를 덮어씀 |
+| fencing 적용 | **거부(0)** | **100** | ✅ 낮은 토큰의 쓰기 차단 |
+
+**메커니즘**
+- 락 획득 시 **단조 증가 토큰** 발급 (Redis `INCR`): A=1, B=2
+- 자원 쓰기를 **원자적 조건부 UPDATE**로: `UPDATE ... SET fence_token = :t WHERE fence_token < :t`
+- B(토큰 2) 저장 후 → A(토큰 1)의 `WHERE 2 < 1` 불만족 → **0 rows = 거부**
+
+**핵심**: 락은 상호배제 "시도"일 뿐, **정확성은 자원 쪽 가드(fencing)가 완성**한다 (Kleppmann 논지). 3단계 원자적 조건부 UPDATE가 그대로 fencing 가드로 재활용된다.
+
+---
+
+## 락 선택 원칙 — 분산 락은 최후에
+
+정확성·단순성·성능 순으로, **더 단순한 수단으로 해결되면 그것을 먼저** 쓴다.
+
+1. **원자적 단일 UPDATE** (`UPDATE ... WHERE 조건`) — 한 문장으로 되면 락 자체가 불필요 (최선)
+2. **DB 락** (낙관 `@Version` / 비관 `FOR UPDATE`) — 읽기-로직-쓰기가 필요하면, DB 안에서
+3. **분산 락** (Redis) — 자원이 단일 DB 행이 아니거나(여러 저장소/서비스), **DB 밖 자원**이거나, DB 경합을 피해야 할 때 (최후)
+
+> 분산 락은 외부 시스템 의존·장애 지점·성능 비용이 크고, 그 자체로 정확성을 보장하지 못해(fencing 필요) 있으므로 "될 수 있으면 더 단순한 수단"이 원칙.
 
 ---
 
