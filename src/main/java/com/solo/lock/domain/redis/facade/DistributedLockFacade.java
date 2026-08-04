@@ -13,7 +13,7 @@ public class DistributedLockFacade {
 
     public void enroll(Long studentId, Long lectureId) throws InterruptedException {
         String token;
-        long deadline = System.currentTimeMillis() + 5000;
+        long deadline = System.currentTimeMillis() + 60000;   // 공정 비교용 대기 60초
         while((token = redisLockRepository.tryLock(lectureId)) == null) {
             if(System.currentTimeMillis() > deadline)
                 throw new RuntimeException("락 획득 실패");

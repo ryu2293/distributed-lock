@@ -13,7 +13,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create    # 학습용
+      ddl-auto: update    # 다중 인스턴스: 첫 기동이 스키마 생성, 이후는 유지
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect

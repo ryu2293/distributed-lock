@@ -16,7 +16,7 @@ public class AopLockFacade {
     private final EnrollmentService enrollmentService;
 
     // 이 한 줄(어노테이션)이 락을 다 처리한다. 몸통은 순수 비즈니스만.
-    @DistributedLock(key = "'lock:lecture:' + #lectureId")   // RedissonFacade와 동일한 키 규칙으로 통일
+    @DistributedLock(key = "'lock:lecture:' + #lectureId", waitTime = 60L)   // 공정 비교용 대기 60초
     public void enroll(Long studentId, Long lectureId) {
         enrollmentService.enroll(studentId, lectureId);   // @Transactional 은 별도 빈 → 락이 트랜잭션 바깥
     }
