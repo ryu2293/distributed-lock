@@ -25,6 +25,9 @@ public class Lecture {
     @Version
     private Long version;
 
+    // 자원이 마지막으로 받아들인 fencing token (기본 0). primitive long → NOT NULL, 기본값 0
+    private long fenceToken;
+
     @Builder
     public Lecture(String title, Integer capacity, Integer enrolledCount) {
         this.title = title;
