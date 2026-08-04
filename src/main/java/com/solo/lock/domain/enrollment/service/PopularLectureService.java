@@ -2,7 +2,10 @@ package com.solo.lock.domain.enrollment.service;
 
 import com.solo.lock.domain.enrollment.dto.response.PopularLectureRow;
 import com.solo.lock.domain.enrollment.repository.EnrollmentRepository;
+import com.solo.lock.domain.redis.annotation.DistributedLock;
 import lombok.RequiredArgsConstructor;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -11,6 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -27,25 +31,45 @@ public class PopularLectureService {
     private final EnrollmentRepository enrollmentRepository;
     private final StringRedisTemplate redisTemplate;   // 캐시 저장소 (Lettuce 기반)
     private final ObjectMapper objectMapper;           // List <-> JSON (스프링 자동 등록 빈)
+    private final RedissonClient redissonClient;
 
     private final AtomicInteger recomputeCount = new AtomicInteger();  // 재계산 횟수 = 스탬피드 측정
 
     public List<PopularLectureRow> getPopular() {
-        // 1. 캐시 조회
         String cached = redisTemplate.opsForValue().get(CACHE_KEY);
         if (cached != null) {
             return deserialize(cached);   // 캐시 히트
         }
 
-        // 2. 캐시 미스 → 재계산 (여기가 스탬피드가 터지는 구간)
-        recomputeCount.incrementAndGet();
-        sleepExpensive();                 // 무거운 집계 흉내 (재계산 창을 넓혀 스탬피드 관찰 용이)
-        List<PopularLectureRow> result =
-                enrollmentRepository.findPopular(PageRequest.of(0, TOP_N));   // 상위 5개
+        RLock lock = redissonClient.getLock("lock:popular");
+        boolean acquire;
+        try {
+            acquire = lock.tryLock(3, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("락 대기 중 인터럽트", e);
+        }
+        List<PopularLectureRow> result;
 
-        // 3. 캐시에 저장 (짧은 TTL로 만료 순간을 만들기 쉽게)
-        redisTemplate.opsForValue()
-                .set(CACHE_KEY, objectMapper.writeValueAsString(result), Duration.ofSeconds(3));
+        if(!acquire) throw new RuntimeException("락 획득 실패!");
+        try {
+            cached = redisTemplate.opsForValue().get(CACHE_KEY);
+            if (cached != null) {
+                return deserialize(cached);   // 캐시 히트
+            }
+
+            recomputeCount.incrementAndGet();
+            sleepExpensive();                 // 무거운 집계 흉내 (재계산 창을 넓혀 스탬피드 관찰 용이)
+
+            result = enrollmentRepository.findPopular(PageRequest.of(0, TOP_N));   // 상위 5개
+
+            // 3. 캐시에 저장 (짧은 TTL로 만료 순간을 만들기 쉽게)
+            redisTemplate.opsForValue()
+                    .set(CACHE_KEY, objectMapper.writeValueAsString(result), Duration.ofSeconds(3));
+        } finally {
+            if(lock.isHeldByCurrentThread()) lock.unlock();
+        }
+
         return result;
     }
 
