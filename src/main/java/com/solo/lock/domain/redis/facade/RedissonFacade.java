@@ -17,7 +17,7 @@ public class RedissonFacade {
 
     public void enroll(Long studentId, Long lectureId) throws InterruptedException{
         RLock lock = redissonClient.getLock("lock:lecture:" + lectureId);
-        boolean acquired = lock.tryLock(3, TimeUnit.SECONDS);
+        boolean acquired = lock.tryLock(60, TimeUnit.SECONDS);   // 공정 비교용 대기 60초
 
         if(!acquired) throw new RuntimeException("락 획득 실패!");
         try {
